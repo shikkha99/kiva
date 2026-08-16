@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Kivo · Phone OTP Fix</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family: 'Inter', sans-serif; }
+    body { 
+      background: #f0f4fe; 
+      min-height: 100vh; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      padding: 40px 32px;
+      border-radius: 40px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 20px 40px -12px rgba(0,20,80,0.2);
+    }
+    .logo { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+    .logo i { font-size:36px; color:#2563eb; }
+    .logo h2 { font-size:28px; color:#0b1e3a; margin:0; }
+    .sub { color:#64748b; margin-bottom:28px; font-size:15px; }
+    .error {
+      color:#dc2626;
+      background:#fee2e2;
+      padding:12px 16px;
+      border-radius:30px;
+      display:none;
+      margin-bottom:12px;
+      font-size:14px;
+    }
+    .success {
+      color:#16a34a;
+      background:#dcfce7;
+      padding:12px 16px;
+      border-radius:30px;
+      display:none;
+      margin-bottom:12px;
+      font-size:14px;
+    }
+    input, select {
+      width:100%;
+      padding:14px 16px;
+      margin-bottom:14px;
+      border:2px solid #e2e8f0;
+      border-radius:60px;
+      font-size:15px;
+      background:#f8fafc;
+      transition:0.2s;
+    }
+    input:focus, select:focus {
+      border-color:#3b82f6;
+      outline:none;
+      box-shadow:0 0 0 4px rgba(59,130,246,0.1);
+      background:white;
+    }
+    .btn {
+      width:100%;
+      padding:16px;
+      border:none;
+      background:#2563eb;
+      color:white;
+      font-weight:600;
+      font-size:16px;
+      border-radius:60px;
+      cursor:pointer;
+      transition:0.2s;
+    }
+    .btn:hover { background:#1d4ed8; }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; }
+    .btn-outline {
+      background:transparent;
+      color:#2563eb;
+      border:2px solid #2563eb;
+    }
+    .btn-outline:hover { background:#eef2ff; }
+    .hidden { display:none !important; }
+    #recaptcha-container {
+      margin:12px 0;
+      min-height:80px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+    .code-group {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-bottom:12px;
+    }
+    .code-group input {
+      flex:1;
+      margin-bottom:0;
+      text-align:center;
+      font-size:22px;
+      letter-spacing:6px;
+      padding:14px 8px;
+    }
+    .code-group button {
+      padding:14px 24px;
+      border:none;
+      background:#2563eb;
+      color:white;
+      border-radius:60px;
+      font-weight:600;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .code-group button:disabled { opacity:0.6; }
+    .phone-group {
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .phone-group select {
+      width:110px;
+      margin-bottom:14px;
+      padding:14px 8px;
+    }
+    .phone-group input {
+      flex:1;
+      margin-bottom:14px;
+    }
+    .toast {
+      position:fixed;
+      bottom:30px;
+      left:50%;
+      transform:translateX(-50%);
+      background:#0f172a;
+      color:white;
+      padding:12px 28px;
+      border-radius:60px;
+      z-index:999;
+      font-weight:500;
+    }
+    .spinner {
+      display:inline-block;
+      width:18px;
+      height:18px;
+      border:3px solid rgba(255,255,255,0.3);
+      border-radius:50%;
+      border-top-color:#fff;
+      animation:spin 1s ease-in-out infinite;
+      vertical-align:middle;
+      margin-right:8px;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .resend-link {
+      color:#2563eb;
+      cursor:pointer;
+      font-weight:600;
+    }
+    .resend-link:hover { text-decoration:underline; }
+    .resend-link.disabled {
+      color:#94a3b8;
+      cursor:default;
+    }
+    .text-center { text-align:center; }
+    .mt-8 { margin-top:8px; }
+    .mt-12 { margin-top:12px; }
+    .mt-16 { margin-top:16px; }
+    .text-sm { font-size:14px; color:#64748b; }
+    .flex { display:flex; gap:8px; align-items:center; }
+    .gap-8 { gap:8px; }
+    .debug-info {
+      background:#f8fafc;
+      padding:12px 16px;
+      border-radius:12px;
+      font-size:12px;
+      color:#64748b;
+      margin-top:12px;
+      display:none;
+      word-break:break-all;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <i class="fas fa-comment-dots"></i>
+    <h2>Kivo</h2>
+  </div>
+  <p class="sub" id="auth-sub">Enter your phone number to continue</p>
+  
+  <div class="error" id="auth-error"></div>
+  <div class="success" id="auth-success"></div>
+  
+  <!-- STEP 1: PHONE INPUT -->
+  <div id="step-phone">
+    <div class="phone-group">
+      <select id="country-code">
+        <option value="+880">🇧🇩 +880</option>
+        <option value="+91">🇮🇳 +91</option>
+        <option value="+1">🇺🇸 +1</option>
+        <option value="+44">🇬🇧 +44</option>
+        <option value="+61">🇦🇺 +61</option>
+        <option value="+86">🇨🇳 +86</option>
+        <option value="+81">🇯🇵 +81</option>
+        <option value="+82">🇰🇷 +82</option>
+        <option value="+971">🇦🇪 +971</option>
+        <option value="+966">🇸🇦 +966</option>
+        <option value="+55">🇧🇷 +55</option>
+        <option value="+52">🇲🇽 +52</option>
+        <option value="+33">🇫🇷 +33</option>
+        <option value="+49">🇩🇪 +49</option>
+        <option value="+39">🇮🇹 +39</option>
+      </select>
+      <input type="tel" id="auth-phone" placeholder="Phone number" autofocus>
+    </div>
+    <div id="recaptcha-container"></div>
+    <button class="btn" id="send-code-btn">
+      <i class="fas fa-paper-plane"></i> Send OTP
+    </button>
+    <p class="text-center text-sm mt-12">
+      <i class="fas fa-shield-alt"></i> Secured with reCAPTCHA
+    </p>
+  </div>
+  
+  <!-- STEP 2: CODE VERIFICATION -->
+  <div id="step-code" class="hidden">
+    <p class="text-center text-sm mt-8">
+      Enter the 6-digit code sent to<br>
+      <strong style="font-size:18px;color:#0b1e3a;" id="display-phone"></strong>
+    </p>
+    <div class="code-group">
+      <input type="text" id="auth-code" placeholder="000000" maxlength="6" inputmode="numeric">
+      <button id="verify-code-btn">Verify</button>
+    </div>
+    <div class="text-center">
+      <span id="resend-link" class="resend-link">Resend OTP</span>
+    </div>
+    <div class="text-center mt-8">
+      <span style="color:#94a3b8;cursor:pointer;font-size:14px;" id="change-phone-btn">
+        <i class="fas fa-arrow-left"></i> Change phone number
+      </span>
+    </div>
+  </div>
+  
+  <!-- DEBUG INFO -->
+  <div class="debug-info" id="debug-info">
+    <strong>Debug:</strong> <span id="debug-message">Ready</span>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "firebase/app": "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+  }
+}
+</script>
+<script type="module">
+// ============================================================
+// KIVO - Phone Authentication FIXED
+// Fixed: auth/internal-error
+// ============================================================
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInWithPhoneNumber, 
+  RecaptchaVerifier, 
+  PhoneAuthProvider,
+  signInWithCredential,
+  updateProfile,
+  setPersistence,
+  browserLocalPersistence
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+
+// ----- FIREBASE CONFIG (Kivo99) -----
+const firebaseConfig = {
+  apiKey: "AIzaSyDOmDfeXz2iN6dE9C8_DdBriNDoO28Su3o",
+  authDomain: "kivo99.firebaseapp.com",
+  projectId: "kivo99",
+  storageBucket: "kivo99.firebasestorage.app",
+  messagingSenderId: "401264846691",
+  appId: "1:401264846691:web:e637efd1c67d711d1f9556",
+  measurementId: "G-01PSVC6M1H"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Set persistence
+setPersistence(auth, browserLocalPersistence);
+
+// ----- DOM REFS -----
+const errorEl = document.getElementById('auth-error');
+const successEl = document.getElementById('auth-success');
+const phoneInput = document.getElementById('auth-phone');
+const countryCode = document.getElementById('country-code');
+const sendBtn = document.getElementById('send-code-btn');
+const stepPhone = document.getElementById('step-phone');
+const stepCode = document.getElementById('step-code');
+const codeInput = document.getElementById('auth-code');
+const verifyBtn = document.getElementById('verify-code-btn');
+const displayPhone = document.getElementById('display-phone');
+const resendLink = document.getElementById('resend-link');
+const changePhoneBtn = document.getElementById('change-phone-btn');
+const debugEl = document.getElementById('debug-message');
+
+// ----- STATE -----
+let confirmationResult = null;
+let mVerificationId = null;
+let mPhoneNumber = null;
+let recaptchaVerifier = null;
+let isProcessing = false;
+
+// ----- DEBUG LOG -----
+function debugLog(msg) {
+  console.log('🔍', msg);
+  if (debugEl) debugEl.textContent = msg;
+}
+
+// ----- UI HELPERS -----
+function showError(msg) { 
+  errorEl.textContent = msg; 
+  errorEl.style.display = 'block';
+  successEl.style.display = 'none';
+  debugLog('❌ ' + msg);
+}
+
+function showSuccess(msg) {
+  successEl.textContent = msg;
+  successEl.style.display = 'block';
+  errorEl.style.display = 'none';
+  debugLog('✅ ' + msg);
+}
+
+function setLoading(btn, loading) {
+  if (btn === sendBtn) {
+    if (loading) {
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<span class="spinner"></span> Sending...';
+    } else {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send OTP';
+    }
+  }
+  if (btn === verifyBtn) {
+    if (loading) {
+      verifyBtn.disabled = true;
+      verifyBtn.innerHTML = '<span class="spinner"></span>';
+    } else {
+      verifyBtn.disabled = false;
+      verifyBtn.innerHTML = 'Verify';
+    }
+  }
+}
+
+function showCodeInput() {
+  stepPhone.classList.add('hidden');
+  stepCode.classList.remove('hidden');
+  displayPhone.textContent = mPhoneNumber;
+  codeInput.focus();
+}
+
+function resetToPhone() {
+  stepCode.classList.add('hidden');
+  stepPhone.classList.remove('hidden');
+  codeInput.value = '';
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+  mVerificationId = null;
+  confirmationResult = null;
+}
+
+// ============================================================
+// RECAPTCHA SETUP (FIXED)
+// ============================================================
+function setupRecaptcha() {
+  try {
+    const container = document.getElementById('recaptcha-container');
+    if (!container) {
+      showError('reCAPTCHA container not found');
+      return null;
+    }
+    
+    // Clear container first
+    container.innerHTML = '';
+    
+    debugLog('Setting up reCAPTCHA...');
+    
+    recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+      callback: () => {
+        debugLog('✅ reCAPTCHA verified successfully');
+        showSuccess('reCAPTCHA verified');
+      },
+      'expired-callback': () => {
+        debugLog('⚠️ reCAPTCHA expired, resetting...');
+        recaptchaVerifier = null;
+        setTimeout(setupRecaptcha, 1000);
+      }
+    });
+    
+    // Render the reCAPTCHA
+    recaptchaVerifier.render().then(() => {
+      debugLog('✅ reCAPTCHA rendered');
+    }).catch((err) => {
+      debugLog('⚠️ reCAPTCHA render error: ' + err.message);
+    });
+    
+    return recaptchaVerifier;
+    
+  } catch (error) {
+    console.error('reCAPTCHA setup error:', error);
+    showError('reCAPTCHA setup failed. Please refresh.');
+    debugLog('❌ reCAPTCHA error: ' + error.message);
+    return null;
+  }
+}
+
+// ============================================================
+// SEND OTP (FIXED)
+// ============================================================
+async function sendOTP() {
+  if (isProcessing) return;
+  
+  const phone = phoneInput.value.trim();
+  if (!phone) { showError('Please enter your phone number'); return; }
+  if (phone.length < 6) { showError('Please enter a valid phone number'); return; }
+  
+  mPhoneNumber = countryCode.value + phone;
+  
+  try {
+    isProcessing = true;
+    setLoading(sendBtn, true);
+    showSuccess('Sending OTP...');
+    debugLog('📱 Sending OTP to: ' + mPhoneNumber);
+    
+    // Reset and setup recaptcha
+    recaptchaVerifier = null;
+    const verifier = setupRecaptcha();
+    if (!verifier) {
+      showError('reCAPTCHA setup failed. Please refresh.');
+      setLoading(sendBtn, false);
+      isProcessing = false;
+      return;
+    }
+    
+    // Wait for recaptcha to be ready
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Send OTP
+    confirmationResult = await signInWithPhoneNumber(auth, mPhoneNumber, verifier);
+    
+    debugLog('✅ OTP sent successfully');
+    debugLog('Verification ID: ' + confirmationResult.verificationId);
+    
+    mVerificationId = confirmationResult.verificationId;
+    
+    // Show code input
+    showCodeInput();
+    showSuccess('✅ OTP sent to your phone!');
+    
+    // Auto-verify when 6 digits entered
+    codeInput.addEventListener('input', () => {
+      if (codeInput.value.length === 6) {
+        verifyOTP();
+      }
+    });
+    
+    // Start timer
+    startResendTimer();
+    
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    debugLog('❌ Error: ' + error.code + ' - ' + error.message);
+    
+    let errorMsg = 'Failed to send OTP. ';
+    if (error.code === 'auth/invalid-phone-number') {
+      errorMsg += 'Invalid phone number format.';
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMsg += 'Too many requests. Please try again later.';
+    } else if (error.code === 'auth/network-request-failed') {
+      errorMsg += 'Network error. Check your connection.';
+    } else if (error.code === 'auth/captcha-check-failed') {
+      errorMsg += 'reCAPTCHA verification failed. Please try again.';
+    } else if (error.code === 'auth/quota-exceeded') {
+      errorMsg += 'SMS quota exceeded. Please try again later.';
+    } else if (error.code === 'auth/app-not-authorized') {
+      errorMsg += 'App not authorized. Check Firebase config.';
+    } else if (error.code === 'auth/internal-error') {
+      errorMsg += 'Internal error. Please try again. Make sure Phone Auth is enabled in Firebase Console.';
+    } else {
+      errorMsg += error.message || 'Please try again.';
+    }
+    showError(errorMsg);
+    setLoading(sendBtn, false);
+    isProcessing = false;
+    
+    // Reset recaptcha
+    recaptchaVerifier = null;
+    setTimeout(setupRecaptcha, 2000);
+  }
+}
+
+// ============================================================
+// VERIFY OTP
+// ============================================================
+async function verifyOTP() {
+  if (isProcessing) return;
+  
+  const code = codeInput.value.trim();
+  if (!code) { showError('Please enter the 6-digit code'); return; }
+  if (code.length !== 6) { showError('Please enter all 6 digits'); return; }
+  
+  try {
+    isProcessing = true;
+    setLoading(verifyBtn, true);
+    showSuccess('Verifying...');
+    debugLog('🔐 Verifying code: ' + code);
+    
+    const credential = PhoneAuthProvider.credential(
+      mVerificationId || confirmationResult?.verificationId,
+      code
+    );
+    
+    const userCredential = await signInWithCredential(auth, credential);
+    const user = userCredential.user;
+    
+    debugLog('✅ User verified: ' + user.uid);
+    
+    // Check if user exists in Firestore
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    
+    if (!userDoc.exists()) {
+      // New user - ask for name
+      const name = prompt('👋 Welcome to Kivo!\nEnter your full name:');
+      if (!name || name.trim() === '') {
+        await user.delete();
+        showError('Name is required to create account');
+        setLoading(verifyBtn, false);
+        isProcessing = false;
+        return;
+      }
+      
+      await updateProfile(user, { displayName: name.trim() });
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        name: name.trim(),
+        phone: user.phoneNumber,
+        photoURL: '',
+        coverURL: '',
+        bio: '',
+        location: '',
+        profession: '',
+        website: '',
+        online: true,
+        lastSeen: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        privacy: { 
+          lastSeen: 'everyone', 
+          onlineStatus: 'everyone', 
+          messaging: 'everyone', 
+          calling: 'everyone' 
+        },
+        callAccess: { freeUntil: null, lastAdRewardAt: null },
+        premium: false,
+        contacts: []
+      });
+      showSuccess('✅ Account created successfully!');
+    } else {
+      // Existing user - update online status
+      await updateDoc(doc(db, 'users', user.uid), { 
+        online: true, 
+        lastSeen: serverTimestamp() 
+      });
+      showSuccess('✅ Welcome back!');
+    }
+    
+    // Success
+    toast('🎉 Welcome to Kivo, ' + (user.displayName || 'User') + '!');
+    
+    // Show success screen
+    document.getElementById('app').innerHTML = `
+      <div style="text-align:center;padding:40px 20px;">
+        <i class="fas fa-check-circle" style="font-size:64px;color:#22c55e;"></i>
+        <h2 style="margin-top:16px;color:#0b1e3a;">You're all set!</h2>
+        <p style="color:#64748b;margin-top:8px;">Welcome to Kivo, ${user.displayName || 'User'}</p>
+        <p style="color:#94a3b8;font-size:14px;margin-top:8px;">
+          <i class="fas fa-phone"></i> ${user.phoneNumber}
+        </p>
+        <button onclick="location.reload()" style="margin-top:20px;padding:12px 32px;background:#2563eb;color:white;border:none;border-radius:60px;font-weight:600;cursor:pointer;">
+          <i class="fas fa-sign-out-alt"></i> Sign Out
+        </button>
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Verification error:', error);
+    debugLog('❌ Verification error: ' + error.code + ' - ' + error.message);
+    
+    let errorMsg = 'Invalid code. ';
+    if (error.code === 'auth/invalid-verification-code') {
+      errorMsg += 'The code is incorrect or expired. Please try again.';
+    } else if (error.code === 'auth/code-expired') {
+      errorMsg += 'The code has expired. Request a new one.';
+    } else {
+      errorMsg += error.message || 'Please try again.';
+    }
+    showError(errorMsg);
+    setLoading(verifyBtn, false);
+    isProcessing = false;
+  }
+}
+
+// ============================================================
+// RESEND OTP
+// ============================================================
+function resendOTP() {
+  if (!mPhoneNumber) {
+    showError('No phone number found. Please enter again.');
+    return;
+  }
+  debugLog('🔄 Resending OTP to: ' + mPhoneNumber);
+  showSuccess('Resending OTP...');
+  sendOTP();
+}
+
+// ============================================================
+// TIMER
+// ============================================================
+function startResendTimer() {
+  let seconds = 60;
+  resendLink.textContent = 'Resend in ' + seconds + 's';
+  resendLink.className = 'resend-link disabled';
+  
+  const interval = setInterval(() => {
+    seconds--;
+    if (seconds <= 0) {
+      clearInterval(interval);
+      resendLink.textContent = 'Resend OTP';
+      resendLink.className = 'resend-link';
+      resendLink.onclick = resendOTP;
+    } else {
+      resendLink.textContent = 'Resend in ' + seconds + 's';
+    }
+  }, 1000);
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg) {
+  const d = document.createElement('div');
+  d.className = 'toast';
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 3000);
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+sendBtn.addEventListener('click', sendOTP);
+verifyBtn.addEventListener('click', verifyOTP);
+changePhoneBtn.addEventListener('click', resetToPhone);
+
+phoneInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendOTP();
+});
+codeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') verifyOTP();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+debugLog('🚀 Kivo Phone Auth initialized');
+debugLog('📱 Firebase Project: kivo99');
+
+// Setup reCAPTCHA after page loads
+setTimeout(() => {
+  setupRecaptcha();
+}, 1000);
+
+console.log('✅ Kivo Phone Auth ready');
+</script>
+</body>
+</html>
